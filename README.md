@@ -9,7 +9,3 @@ This is a monorepo setup using **Turborepo** that includes a Next.js frontend an
 - **PostgreSQL** as the database
 - **Prisma ORM** for database management
 - Monorepo structure using **Turborepo**
-
-## Setup Instructions
-
-For detailed setup instructions, refer to [this Medium blog](https://medium.com/@me.ajeesh7979/setting-up-a-shared-postgresql-database-in-a-turborepo-for-express-js-and-next-js-using-prisma-a447d089237f).
