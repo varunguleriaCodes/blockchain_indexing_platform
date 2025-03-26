@@ -3,7 +3,10 @@
   "version": "0.0.0",
   "scripts": {
     "db:generate": "prisma generate",
-    "db:push": "prisma db push --skip-generate"
+    "db:push": "prisma db push --skip-generate",
+    "studio": "prisma studio",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev" 
   },
   "dependencies": {
     "prisma": "^5.20.0"

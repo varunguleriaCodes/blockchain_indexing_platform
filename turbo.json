@@ -13,6 +13,13 @@
     "db:push": {
       "cache": false
     },
+    "db:migrate:deploy": {
+      "cache": false
+    },    
+    "db:migrate:dev": {
+      "cache": false,
+      "persistent": true
+    },
     "build": {
       "dependsOn": ["^build", "^db:generate"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
