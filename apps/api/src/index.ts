@@ -12,7 +12,7 @@ app.use(express.json());
 
 
 app.use('/api/auth', authRoutes);
-app.use('/api/postgres', postgresRoutes);
+app.use('/api/postgres', auth ,postgresRoutes);
 
 app.get('/api/protected', auth, (req, res) => {
   res.json({ message: 'This is a protected route' });

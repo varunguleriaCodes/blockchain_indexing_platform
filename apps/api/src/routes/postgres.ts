@@ -127,16 +127,46 @@ router.post('/connections/:id/data', auth, async (req: any, res: Response): Prom
 
     await client.connect();
 
+    const schemaTable = connection.schema ? `${connection.schema}.${table}` : table;
+
+    // Check if the table exists
+    const tableExistsQuery = `
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = $1 AND table_name = $2
+      );
+    `;
+    
+    const tableExistsResult = await client.query(tableExistsQuery, [
+      connection.schema || 'public', 
+      table
+    ]);
+
+    const tableExists = tableExistsResult.rows[0].exists;
+
+    // If the table does not exist, create it
+    if (!tableExists) {
+        // Generate column definitions from the data
+        const columns = Object.keys(data[0])
+          .map(col => `"${col}" TEXT`) // Change TEXT to appropriate data types if necessary
+          .join(', ');
+
+        const createTableQuery = `
+          CREATE TABLE ${schemaTable} (${columns});
+        `;
+
+        await client.query(createTableQuery);
+    }
+
     // Get column names from the data
     const columns = Object.keys(data[0]);
     const values = data.map((row: Record<string, unknown>) => Object.values(row));
     
     // Create the query
     const query = `
-      INSERT INTO ${connection.schema ? `${connection.schema}.${table}` : table}
-      (${columns.join(', ')})
-      VALUES ${values.map((_: unknown[], i: number) => `(${columns.map((_: string, j: number) => `$${i * columns.length + j + 1}`).join(', ')})`).join(', ')}
-      RETURNING *
+      INSERT INTO ${schemaTable} (${columns.join(', ')})
+      VALUES ${values.map((_, i) => `(${columns.map((_, j) => `$${i * columns.length + j + 1}`).join(', ')})`).join(', ')}
+      RETURNING *;
     `;
 
     // Flatten values array for the query
@@ -150,13 +180,14 @@ router.post('/connections/:id/data', auth, async (req: any, res: Response): Prom
       message: 'Data inserted successfully',
       insertedRows: result.rows
     });
-  } catch (error) {
+} catch (error) {
     console.error('Error inserting data:', error);
     res.status(400).json({ 
       error: 'Failed to insert data',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
-  }
+}
+
 });
 
 export default router; 
