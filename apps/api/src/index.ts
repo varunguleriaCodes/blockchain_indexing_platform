@@ -3,7 +3,6 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth';
 import { auth } from './middleware/auth';
 
-// Load environment variables
 dotenv.config();
 
 const app = express();
