@@ -1,25 +1,23 @@
-import express, { Request, Response } from "express";
-const app = express();
-import { PrismaClient } from "@prisma/client";
+import express from "express";
+import dotenv from 'dotenv';
+import authRoutes from './routes/auth';
+import { auth } from './middleware/auth';
 
-const prisma = new PrismaClient();
+// Load environment variables
+dotenv.config();
+
+const app = express();
 
 app.use(express.json());
 
-app.get('/',(req:Request,res: Response)=>{
- res.status(200).send("asdbhkj")
-})
-app.post("/", async (req: Request, res: Response) => {
-  await prisma.user.create({
-    data: {
-      name: "dead",
-      email: "dead@gmail.com",
-      password: "123456",
-    },
-  });
-  console.log("user created!!!");
+
+app.use('/api/auth', authRoutes);
+
+app.get('/api/protected', auth, (req, res) => {
+  res.json({ message: 'This is a protected route' });
 });
 
-app.listen(5000, () => {
-  console.log("Server listening on port 5k");
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}`);
 });
