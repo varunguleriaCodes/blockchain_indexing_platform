@@ -1,6 +1,7 @@
 import express from "express";
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth';
+import postgresRoutes from './routes/postgres';
 import { auth } from './middleware/auth';
 
 // Load environment variables
@@ -12,6 +13,7 @@ app.use(express.json());
 
 
 app.use('/api/auth', authRoutes);
+app.use('/api/postgres', postgresRoutes);
 
 app.get('/api/protected', auth, (req, res) => {
   res.json({ message: 'This is a protected route' });

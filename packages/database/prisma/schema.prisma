@@ -14,8 +14,27 @@ datasource db {
 }
 
 model User {
-  id       Int    @unique @default(autoincrement())
+  id       Int      @unique @default(autoincrement())
   name     String
   email    String
   password String
+  postgresConnections PostgresConnection[]
+}
+
+model PostgresConnection {
+  id          Int      @unique @default(autoincrement())
+  name        String   // A friendly name for the connection
+  host        String
+  port        Int
+  database    String
+  username    String
+  password    String
+  schema      String?  // Optional schema name
+  ssl         Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }
