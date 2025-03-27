@@ -4,7 +4,6 @@ import authRoutes from './routes/auth';
 import postgresRoutes from './routes/postgres';
 import { auth } from './middleware/auth';
 
-// Load environment variables
 dotenv.config();
 
 const app = express();
