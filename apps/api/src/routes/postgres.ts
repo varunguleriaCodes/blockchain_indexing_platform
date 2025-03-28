@@ -165,7 +165,7 @@ router.post('/connections/:id/data', auth, async (req: any, res: Response): Prom
     // Create the query
     const query = `
       INSERT INTO ${schemaTable} (${columns.join(', ')})
-      VALUES ${values.map((_, i) => `(${columns.map((_, j) => `$${i * columns.length + j + 1}`).join(', ')})`).join(', ')}
+      VALUES ${values.map((_: any, i: number) => `(${columns.map((_, j) => `$${i * columns.length + j + 1}`).join(', ')})`).join(', ')}
       RETURNING *;
     `;
 

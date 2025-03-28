@@ -19,7 +19,8 @@ model User {
   email               String @unique
   password            String
   postgresConnections PostgresConnection[]
-  walletAddress       String @unique
+  walletAddress       String[] @unique
+  webhookId           
 }
 
 model PostgresConnection {
