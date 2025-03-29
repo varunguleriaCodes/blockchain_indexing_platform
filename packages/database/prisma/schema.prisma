@@ -20,7 +20,7 @@ model User {
   password            String
   postgresConnections PostgresConnection[]
   walletAddress       String[] @unique
-  webhookId           
+  webhooks            Webhook[]
 }
 
 model PostgresConnection {
@@ -37,6 +37,19 @@ model PostgresConnection {
   updatedAt   DateTime @updatedAt
   userId      Int
   user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model Webhook {
+  id                Int      @unique @default(autoincrement())
+  webhookId         String   @unique
+  walletAddress     String[]
+  transactionTypes  String[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  userId            Int
+  user              User     @relation(fields: [userId], references: [id])
 
   @@index([userId])
 }
