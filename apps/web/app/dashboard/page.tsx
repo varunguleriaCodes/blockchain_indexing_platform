@@ -1,8 +1,17 @@
 "use client";
-import { useState } from "react";
+import { useState,useEffect } from "react";
+import { useRouter } from "next/navigation";
 import axios from "axios";
 
 export default function Dashboard() {
+  const router = useRouter();
+  useEffect(() => {
+    const accessToken = sessionStorage.getItem("accessToken");
+    if (!accessToken) {
+      router.push("/login");
+    }
+  }, [router]);
+
   const [formData, setFormData] = useState({
     host: "",
     port: "",
@@ -34,9 +43,9 @@ export default function Dashboard() {
     try {
       // Get the access token from session storage
       const accessToken = sessionStorage.getItem('accessToken');
-      
+      const user=JSON.parse(sessionStorage.getItem("user")||"");
       // First create PostgreSQL connection
-      const postgresResponse = await axios.post('/api/postgres/connection', {
+      const postgresResponse = await axios.post(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/postgres/connections?userId=${user.id}`, {
         host: formData.host,
         port: formData.port,
         database: formData.database,
@@ -64,8 +73,8 @@ export default function Dashboard() {
       }
 
       // Create webhook
-      const webhookResponse = await axios.post('/api/helius/create-webhook', {
-        walletAddress: formData.walletAddress,
+      const webhookResponse = await axios.post(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/helius/create-webhook`, {
+        accountAddresses: formData.walletAddress ? formData.walletAddress.split(",").map(addr => addr.trim()):[],
         transactionTypes: selectedCategories,
         userId: userId
       }, {
@@ -78,7 +87,7 @@ export default function Dashboard() {
       setShowTableViewer(true);
       
       // Fetch available tables
-      const tablesResponse = await axios.get(`/api/postgres/connections/${postgresResponse.data.id}/tables`, {
+      const tablesResponse = await axios.get(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/postgres/connections/${postgresResponse.data.id}/tables`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`
         }
@@ -102,7 +111,7 @@ export default function Dashboard() {
       setError("");
       const accessToken = sessionStorage.getItem('accessToken');
       
-      const response = await axios.get(`/api/postgres/connections/${connectionId}/tables/${tableName}/data`, {
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/postgres/connections/${connectionId}/tables/${tableName}/data`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`
         }
@@ -326,14 +335,6 @@ export default function Dashboard() {
                   ) : "Setup Connection & Webhook"}
                 </button>
                 
-                <button
-                  type="button"
-                  onClick={handleCancel}
-                  disabled={loading}
-                  className="py-2 px-4 bg-white border border-gray-200 text-gray-600 rounded hover:bg-gray-100 active:bg-gray-200 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
               </div>
             </form>
           </div>

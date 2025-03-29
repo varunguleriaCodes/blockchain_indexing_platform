@@ -7,33 +7,34 @@ import { Client } from 'pg';
 // Add PostgreSQL connection
 router.post('/connections', auth, async (req: any, res: Response): Promise<void> => {
   try {
-    const { name, host, port, database, username, password, schema, ssl } = req.body;
-    const userId = req.user.userId;
+    const {host, port, database, username, password } = req.body;
+    const userId = parseInt(req.query.userId);
+    const parsedPort = parseInt(port);
 
-    // Test the connection before saving
     const client = new Client({
       host,
-      port,
+      port:parsedPort,
       database,
       user: username,
       password,
-      ssl: ssl ? { rejectUnauthorized: false } : false
+      ssl: {
+        rejectUnauthorized: false,
+      },
     });
-
     await client.connect();
-    await client.end();
 
+    await client.end();
     // Save the connection details
     const connection = await prisma.postgresConnection.create({
       data: {
-        name,
+        name:username,
         host,
-        port,
+        port:parsedPort,
         database,
         username,
         password,
-        schema,
-        ssl,
+        schema:"public",
+        ssl:true,
         userId
       }
     });

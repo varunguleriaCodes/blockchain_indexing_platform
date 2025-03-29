@@ -19,11 +19,11 @@ export default function Example() {
     
     try {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-      const response = await axios.post(endpoint, formData);
+      const response = await axios.post(`${process.env.NEXT_PUBLIC_BACKEND_URL}${endpoint}`, formData);
       
-      if (response.data.accessToken) {
+      if (response.data.token) {
         // Save the access token
-        sessionStorage.setItem('accessToken', response.data.accessToken);
+        sessionStorage.setItem('accessToken', response.data.token);
         // Save user info if available
         if (response.data.user) {
           sessionStorage.setItem('user', JSON.stringify(response.data.user));
@@ -35,7 +35,7 @@ export default function Example() {
       }
     } catch (error: any) {
       console.error("Error:", error);
-      setError(error.response?.data?.message || "An error occurred during authentication");
+      setError(error.response?.data?.error || "An error occurred during authentication");
     }
   };
 
