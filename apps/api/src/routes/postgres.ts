@@ -190,4 +190,110 @@ router.post('/connections/:id/data', auth, async (req: any, res: Response): Prom
 
 });
 
+// Get available tables for a connection
+router.get('/connections/:id/tables', auth, async (req: any, res: Response): Promise<void> => {
+  try {
+    const connection = await prisma.postgresConnection.findFirst({
+      where: {
+        id: parseInt(req.params.id),
+        userId: req.user.userId
+      }
+    });
+
+    if (!connection) {
+      res.status(404).json({ error: 'Connection not found' });
+      return;
+    }
+
+    const client = new Client({
+      host: connection.host,
+      port: connection.port,
+      database: connection.database,
+      user: connection.username,
+      password: connection.password,
+      ssl: connection.ssl ? { rejectUnauthorized: false } : false
+    });
+
+    await client.connect();
+
+    const schema = connection.schema || 'public';
+    const query = `
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = $1 
+      AND table_type = 'BASE TABLE'
+      ORDER BY table_name;
+    `;
+    
+    const result = await client.query(query, [schema]);
+    await client.end();
+
+    const tables = result.rows.map(row => row.table_name);
+    res.json({ tables });
+  } catch (error) {
+    console.error('Error fetching tables:', error);
+    res.status(500).json({ error: 'Failed to fetch tables' });
+  }
+});
+
+// Get data from a specific table
+router.get('/connections/:id/tables/:tableName/data', auth, async (req: any, res: Response): Promise<void> => {
+  try {
+    const connection = await prisma.postgresConnection.findFirst({
+      where: {
+        id: parseInt(req.params.id),
+        userId: req.user.userId
+      }
+    });
+
+    if (!connection) {
+      res.status(404).json({ error: 'Connection not found' });
+      return;
+    }
+
+    const client = new Client({
+      host: connection.host,
+      port: connection.port,
+      database: connection.database,
+      user: connection.username,
+      password: connection.password,
+      ssl: connection.ssl ? { rejectUnauthorized: false } : false
+    });
+
+    await client.connect();
+
+    const schema = connection.schema || 'public';
+    const tableName = req.params.tableName;
+    
+    // First verify the table exists
+    const tableCheck = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = $1 
+        AND table_name = $2
+      );
+    `, [schema, tableName]);
+
+    if (!tableCheck.rows[0].exists) {
+      await client.end();
+      res.status(404).json({ error: 'Table not found' });
+      return;
+    }
+
+    // Fetch the data with a limit
+    const query = `
+      SELECT * FROM ${schema}.${tableName}
+      LIMIT 100;
+    `;
+    
+    const result = await client.query(query);
+    await client.end();
+
+    res.json({ rows: result.rows });
+  } catch (error) {
+    console.error('Error fetching table data:', error);
+    res.status(500).json({ error: 'Failed to fetch table data' });
+  }
+});
+
 export default router; 

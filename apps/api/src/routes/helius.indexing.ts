@@ -10,7 +10,7 @@ const fs = require("fs");
 
 router.post('/create-webhook', async (req: Request, res: Response):Promise<void> => {
   try {
-      const { accountAddresses, transactionTypes, userId, webhookUrl } = req.body;
+      const { accountAddresses, transactionTypes, userId } = req.body;
 
       if (!accountAddresses || !transactionTypes || !userId) {
           res.status(400).json({ error: 'Missing required parameters' });
@@ -23,7 +23,8 @@ router.post('/create-webhook', async (req: Request, res: Response):Promise<void>
            return;
       }
 
-      const webhookURL = `${webhookUrl}`;
+      const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+      const webhookURL = `${backendUrl}/api/helius/webhook-handler?userId=${userId}`;
       const apiEndpoint = `https://api.helius.xyz/v0/webhooks?api-key=${apiKey}`;
 
       const payload = {
@@ -41,7 +42,6 @@ router.post('/create-webhook', async (req: Request, res: Response):Promise<void>
       });
 
       const webhookCreationData = await response.json();
-
 
       console.log('Helius Webhook Created:', webhookCreationData);
 
