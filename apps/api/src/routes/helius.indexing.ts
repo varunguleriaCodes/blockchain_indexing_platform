@@ -8,31 +8,57 @@ import { transactionsHandler } from '../services/transaction.handler';
 const fs = require("fs");
 
 
-router.post('/create-webook', async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { walletAddresses, transactionTypes, userId } = req.body;
+router.post('/create-webhook', async (req: Request, res: Response):Promise<void> => {
+  try {
+      const { accountAddresses, transactionTypes, userId, webhookUrl } = req.body;
 
-        // Create webhook with Helius
-        const webhookCreationData = await helius.createWebhook({
-            accountAddresses: walletAddresses,
-            transactionTypes: transactionTypes,
-            webhookURL: 'https://a057-2405-201-5003-f857-949d-f81f-f6c0-8ee.ngrok-free.app/api/helius/webhook-handler?userId=' + userId,
-        });
+      if (!accountAddresses || !transactionTypes || !userId) {
+          res.status(400).json({ error: 'Missing required parameters' });
+          return;
+      }
 
-        await prisma.webhook.create({
-            data: {
-                webhookId: webhookCreationData.webhookID,
-                walletAddress: walletAddresses,
-                transactionTypes: transactionTypes,
-                userId: userId
-            }
-        });
+      const apiKey = process.env.HELIUS_API_KEY;
+      if (!apiKey) {
+           res.status(500).json({ error: 'Helius API key is not configured' });
+           return;
+      }
 
-        res.status(201).json(webhookCreationData);
-    } catch (error) {
-        console.error('Error creating webhook:', error);
-        res.status(500).json({ error: 'Failed to create webhook' });
-    }
+      const webhookURL = `${webhookUrl}`;
+      const apiEndpoint = `https://api.helius.xyz/v0/webhooks?api-key=${apiKey}`;
+
+      const payload = {
+          webhookURL,
+          transactionTypes,
+          accountAddresses,
+          webhookType: "enhanced",
+          txnStatus: "all",
+      };
+
+      const response = await fetch(apiEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+      });
+
+      const webhookCreationData = await response.json();
+
+
+      console.log('Helius Webhook Created:', webhookCreationData);
+
+      await prisma.webhook.create({
+          data: {
+              webhookId: webhookCreationData.webhookID,
+              walletAddress: accountAddresses,
+              transactionTypes: transactionTypes,
+              userId
+          }
+      });
+
+      res.status(201).json(webhookCreationData);
+  } catch (error) {
+      console.error('Unexpected Error:', error);
+      res.status(500).json({ error: 'Internal Server Error', details: error instanceof Error ? error.message : 'Unknown error' });
+  }
 });
 
 router.delete('/webhook/:webhookId', auth, async (req: Request, res: Response): Promise<void> => {
@@ -84,7 +110,6 @@ router.post("/webhook-handler", async (req: Request, res: Response): Promise<voi
                 postgresConnections: true
             }
         });
-
         if (!user || !user.postgresConnections.length) {
             console.error('No database connection found');
             res.status(404).json({ error: 'Webhook or database connection not found' });
@@ -94,7 +119,7 @@ router.post("/webhook-handler", async (req: Request, res: Response): Promise<voi
         const connectionPostgresData = user.postgresConnections[0]; // Using first connection
 
         // Process different types of data
-        const dataFormation = transactionsHandler(transactionData[0].type.toLowerCase(), transactionData);
+        const dataFormation = transactionsHandler(transactionData[0].type.toLowerCase(), transactionData[0]);
         if(!dataFormation) {
             res.status(200).send("Event Not Supported");
             return;

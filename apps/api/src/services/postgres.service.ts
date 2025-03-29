@@ -21,10 +21,7 @@ interface InsertDataParams {
 
 export async function insertData({ connectionId, userId, table, data }: InsertDataParams) {
   const connection = await prisma.postgresConnection.findFirst({
-    where: {
-      id: connectionId,
-      userId
-    }
+    where: { id: connectionId, userId }
   });
 
   if (!connection) {
@@ -45,10 +42,16 @@ export async function insertData({ connectionId, userId, table, data }: InsertDa
 
     const schemaTable = connection.schema ? `${connection.schema}.${table}` : table;
 
-    // Check if the table exists
+    // Ensure data is always an array
+    const rows = Array.isArray(data) ? data : [data];
+
+    // Extract column names dynamically
+    const columns = Object.keys(rows[0]).map(col => `"${col}"`);
+    
+    // Check if table exists
     const tableExistsQuery = `
       SELECT EXISTS (
-        SELECT FROM information_schema.tables 
+        SELECT 1 FROM information_schema.tables 
         WHERE table_schema = $1 AND table_name = $2
       );
     `;
@@ -57,43 +60,35 @@ export async function insertData({ connectionId, userId, table, data }: InsertDa
       connection.schema || 'public', 
       table
     ]);
-
     const tableExists = tableExistsResult.rows[0].exists;
 
-    // If the table does not exist, create it
+    // If the table doesn't exist, create it dynamically
     if (!tableExists) {
-      // Generate column definitions from the data
-      const columns = Object.keys(data[0])
-        .map(col => `"${col}" TEXT`) // Change TEXT to appropriate data types if necessary
+      const columnDefinitions = Object.keys(rows[0])
+        .map(col => `"${col}" ${col === "eventTime" ? "TIMESTAMP" : "TEXT"}`)
         .join(', ');
 
-      const createTableQuery = `
-        CREATE TABLE ${schemaTable} (${columns});
-      `;
-
+      const createTableQuery = `CREATE TABLE ${schemaTable} (${columnDefinitions});`;
       await client.query(createTableQuery);
     }
 
-    // Get column names from the data
-    const columns = Object.keys(data[0]);
-    const values = data.map((row: Record<string, unknown>) => Object.values(row));
-    
-    // Create the query
-    const query = `
+    // Prepare INSERT query
+    const valuesPlaceholder = rows.map(
+      (_, rowIndex) => `(${columns.map((_, colIndex) => `$${rowIndex * columns.length + colIndex + 1}`).join(', ')})`
+    ).join(', ');
+
+    const flattenedValues = rows.flatMap(row => Object.values(row));
+
+    const insertQuery = `
       INSERT INTO ${schemaTable} (${columns.join(', ')})
-      VALUES ${values.map((_: unknown[], i: number) => 
-        `(${columns.map((_: string, j: number) => `$${i * columns.length + j + 1}`).join(', ')})`
-      ).join(', ')}
+      VALUES ${valuesPlaceholder}
       RETURNING *;
     `;
 
-    // Flatten values array for the query
-    const flattenedValues = values.flat();
-
     // Execute the query
-    const result = await client.query(query, flattenedValues);
+    const result = await client.query(insertQuery, flattenedValues);
     return result.rows;
   } finally {
     await client.end();
   }
-} 
+}
