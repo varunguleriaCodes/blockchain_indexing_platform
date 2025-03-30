@@ -1,4 +1,4 @@
-import { Client } from 'pg';
+import { Pool } from 'pg';
 import prisma from '../lib/prisma';
 
 interface PostgresConnection {
@@ -20,75 +20,78 @@ interface InsertDataParams {
 }
 
 export async function insertData({ connectionId, userId, table, data }: InsertDataParams) {
-  const connection = await prisma.postgresConnection.findFirst({
-    where: { id: connectionId, userId }
-  });
-
-  if (!connection) {
-    throw new Error('Connection not found');
-  }
-
-  const client = new Client({
-    host: connection.host,
-    port: connection.port,
-    database: connection.database,
-    user: connection.username,
-    password: connection.password,
-    ssl: connection.ssl ? { rejectUnauthorized: false } : false
-  });
-
   try {
-    await client.connect();
+    // Get connection details from database
+    const connection = await prisma.postgresConnection.findUnique({
+      where: { id: connectionId }
+    });
 
-    const schemaTable = connection.schema ? `${connection.schema}.${table}` : table;
-
-    // Ensure data is always an array
-    const rows = Array.isArray(data) ? data : [data];
-
-    // Extract column names dynamically
-    const columns = Object.keys(rows[0]).map(col => `"${col}"`);
-    
-    // Check if table exists
-    const tableExistsQuery = `
-      SELECT EXISTS (
-        SELECT 1 FROM information_schema.tables 
-        WHERE table_schema = $1 AND table_name = $2
-      );
-    `;
-    
-    const tableExistsResult = await client.query(tableExistsQuery, [
-      connection.schema || 'public', 
-      table
-    ]);
-    const tableExists = tableExistsResult.rows[0].exists;
-
-    // If the table doesn't exist, create it dynamically
-    if (!tableExists) {
-      const columnDefinitions = Object.keys(rows[0])
-        .map(col => `"${col}" ${col === "eventTime" ? "TIMESTAMP" : "TEXT"}`)
-        .join(', ');
-
-      const createTableQuery = `CREATE TABLE ${schemaTable} (${columnDefinitions});`;
-      await client.query(createTableQuery);
+    if (!connection) {
+      throw new Error('Database connection not found');
     }
 
-    // Prepare INSERT query
-    const valuesPlaceholder = rows.map(
-      (_, rowIndex) => `(${columns.map((_, colIndex) => `$${rowIndex * columns.length + colIndex + 1}`).join(', ')})`
-    ).join(', ');
+    // Create connection pool
+    const pool = new Pool({
+      host: connection.host,
+      port: connection.port,
+      database: connection.database,
+      user: connection.username,
+      password: connection.password,
+    });
 
-    const flattenedValues = rows.flatMap(row => Object.values(row));
-
-    const insertQuery = `
-      INSERT INTO ${schemaTable} (${columns.join(', ')})
-      VALUES ${valuesPlaceholder}
-      RETURNING *;
+    // Check if table has a primary key
+    const primaryKeyQuery = `
+      SELECT c.column_name
+      FROM information_schema.table_constraints tc
+      JOIN information_schema.constraint_column_usage AS ccu USING (constraint_schema, constraint_name)
+      JOIN information_schema.columns AS c ON c.table_schema = tc.constraint_schema
+        AND tc.table_name = c.table_name AND ccu.column_name = c.column_name
+      WHERE constraint_type = 'PRIMARY KEY' AND tc.table_name = $1;
     `;
+    const primaryKeyResult = await pool.query(primaryKeyQuery, [table]);
+    const primaryKey = primaryKeyResult.rows[0]?.column_name;
 
-    // Execute the query
-    const result = await client.query(insertQuery, flattenedValues);
-    return result.rows;
-  } finally {
-    await client.end();
+    // If no primary key exists, add one
+    if (!primaryKey) {
+      const addPrimaryKeyQuery = `
+        ALTER TABLE ${table} 
+        ADD COLUMN id UUID DEFAULT gen_random_uuid() PRIMARY KEY;
+      `;
+      await pool.query(addPrimaryKeyQuery);
+    }
+
+    // Insert data with primary key handling
+    for (const row of data) {
+      const columns = Object.keys(row);
+      const values = Object.values(row);
+      const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
+
+      // If primary key exists, use UPSERT
+      if (primaryKey) {
+        const updateColumns = columns.filter(col => col !== primaryKey);
+        const updateSet = updateColumns.map(col => `${col} = EXCLUDED.${col}`).join(', ');
+        
+        const query = `
+          INSERT INTO ${table} (${columns.join(', ')})
+          VALUES (${placeholders})
+          ON CONFLICT (${primaryKey})
+          DO UPDATE SET ${updateSet}
+        `;
+        await pool.query(query, values);
+      } else {
+        // Regular insert with UUID
+        const query = `
+          INSERT INTO ${table} (id, ${columns.join(', ')})
+          VALUES (gen_random_uuid(), ${placeholders})
+        `;
+        await pool.query(query, values);
+      }
+    }
+
+    await pool.end();
+    return { success: true };
+  } catch (error) {
+    console.error('Error inserting data:', error);
+    throw error;
   }
 }

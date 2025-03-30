@@ -1,22 +1,17 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState,useEffect } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
-import { io, Socket } from "socket.io-client";
-
-interface Webhook {
-  id: number;
-  webhookId: string;
-  walletAddress: string;
-  transactionTypes: string[];
-  createdAt: string;
-}
 
 export default function Dashboard() {
   const router = useRouter();
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
-  const [showWebhooks, setShowWebhooks] = useState(false);
+  useEffect(() => {
+    const accessToken = sessionStorage.getItem("accessToken");
+    if (!accessToken) {
+      router.push("/login");
+    }
+  }, [router]);
+
   const [formData, setFormData] = useState({
     host: "",
     port: "",
@@ -39,63 +34,46 @@ export default function Dashboard() {
   const [availableTables, setAvailableTables] = useState<string[]>([]);
   const [connectionId, setConnectionId] = useState<number | null>(null);
 
-  // Setup Socket.IO connection
+  // Add polling effect
   useEffect(() => {
-    const accessToken = sessionStorage.getItem("accessToken");
-    const userData = JSON.parse(sessionStorage.getItem("user") || "{}");
-    
-    if (!accessToken) {
-      router.push("/login");
-      return;
+    let pollInterval: NodeJS.Timeout;
+
+    // Only start polling if we have a selected table and connection ID
+    if (selectedTable && connectionId) {
+      // Initial fetch
+      fetchTableData();
+
+      // Set up polling interval
+      pollInterval = setInterval(fetchTableData, 30000); // Poll every 30 seconds
     }
 
-    // Initialize Socket.IO connection
-    const socketInstance = io(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000');
-
-    socketInstance.on('connect', () => {
-      console.log('Socket.IO Connected');
-      // Authenticate the socket connection
-      socketInstance.emit('authenticate', {
-        userId: userData.id,
-        token: accessToken
-      });
-    });
-
-    socketInstance.on('tableUpdate', async (data) => {
-      // Check if the update is for the current user and selected table
-      if (data.userId === userData.id && data.tableName === selectedTable) {
-        // Refresh table data
-        await refreshTableData();
-      }
-    });
-
-    socketInstance.on('disconnect', () => {
-      console.log('Socket.IO Disconnected');
-    });
-
-    setSocket(socketInstance);
-
-    // Cleanup on unmount
+    // Cleanup interval on unmount or when dependencies change
     return () => {
-      socketInstance.disconnect();
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
     };
-  }, [router]);
+  }, [selectedTable, connectionId]); // Dependencies for the effect
 
-  // Function to refresh table data
-  const refreshTableData = async () => {
+  // Separate function to fetch table data
+  const fetchTableData = async () => {
     if (!connectionId || !selectedTable) return;
-    
+
     try {
       const accessToken = sessionStorage.getItem('accessToken');
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/postgres/connections/${connectionId}/tables/${selectedTable}/data`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/postgres/connections/${connectionId}/tables/${selectedTable}/data`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`
+          }
         }
-      });
+      );
       
       setTableData(response.data.rows);
-    } catch (error) {
-      console.error("Error refreshing table data:", error);
+    } catch (error: any) {
+      console.error("Error fetching table data:", error);
+      setError(error.response?.data?.message || "Failed to fetch table data");
     }
   };
 
@@ -174,16 +152,8 @@ export default function Dashboard() {
     try {
       setLoading(true);
       setError("");
-      const accessToken = sessionStorage.getItem('accessToken');
-      
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/postgres/connections/${connectionId}/tables/${tableName}/data`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
-      });
-      
       setSelectedTable(tableName);
-      setTableData(response.data.rows);
+      await fetchTableData();
     } catch (error: any) {
       console.error("Error fetching table data:", error);
       setError(error.response?.data?.message || "Failed to fetch table data");
@@ -226,57 +196,15 @@ export default function Dashboard() {
     });
   };
 
-  // Fetch webhooks
-  const fetchWebhooks = async () => {
-    try {
-      const accessToken = sessionStorage.getItem('accessToken');
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/helius/webhooks`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
-      });
-      setWebhooks(response.data);
-    } catch (error) {
-      console.error('Error fetching webhooks:', error);
-      setError('Failed to fetch webhooks');
-    }
-  };
-
-  // Delete webhook
-  const handleDeleteWebhook = async (webhookId: string) => {
-    try {
-      const accessToken = sessionStorage.getItem('accessToken');
-      await axios.delete(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/helius/webhook/${webhookId}`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
-      });
-      // Refresh webhooks list
-      fetchWebhooks();
-      setSuccess('Webhook deleted successfully');
-    } catch (error) {
-      console.error('Error deleting webhook:', error);
-      setError('Failed to delete webhook');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto">
-        {!showTableViewer && !showWebhooks ? (
+        {!showTableViewer ? (
           <div className="p-8 rounded border border-gray-200 bg-white">
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="font-medium text-3xl">Setup Database & Webhook</h1>
-              <button
-                onClick={() => {
-                  setShowWebhooks(true);
-                  fetchWebhooks();
-                }}
-                className="px-4 py-2 text-sm text-blue-600 hover:text-blue-800"
-              >
-                View Webhooks
-              </button>
-            </div>
+            <h1 className="font-medium text-3xl">Setup Database & Webhook</h1>
+            <p className="text-gray-600 mt-6">
+              Enter your PostgreSQL database connection details and webhook configuration.
+            </p>
 
             {error && (
               <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded text-red-600">
@@ -444,74 +372,6 @@ export default function Dashboard() {
                 
               </div>
             </form>
-          </div>
-        ) : showWebhooks ? (
-          <div className="p-8 rounded border border-gray-200 bg-white">
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="font-medium text-3xl">Webhook Management</h1>
-              <button
-                onClick={() => setShowWebhooks(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
-              >
-                Back to Setup
-              </button>
-            </div>
-
-            {error && (
-              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded text-red-600">
-                {error}
-              </div>
-            )}
-
-            {success && (
-              <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded text-green-600">
-                {success}
-              </div>
-            )}
-
-            {webhooks.length === 0 ? (
-              <div className="text-center text-gray-500 mt-8">
-                No webhooks found. Create one to get started.
-              </div>
-            ) : (
-              <div className="mt-6 space-y-4">
-                {webhooks.map((webhook) => (
-                  <div
-                    key={webhook.id}
-                    className="p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-medium text-gray-900">Wallet Address</h3>
-                        <p className="text-sm text-gray-600">{webhook.walletAddress}</p>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteWebhook(webhook.webhookId)}
-                        className="px-3 py-1 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                    <div className="mt-2">
-                      <h3 className="font-medium text-gray-900">Transaction Types</h3>
-                      <div className="flex flex-wrap gap-2 mt-1">
-                        {webhook.transactionTypes.map((type) => (
-                          <span
-                            key={type}
-                            className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded"
-                          >
-                            {type}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="mt-2 text-sm text-gray-500">
-                      Created: {new Date(webhook.createdAt).toLocaleString()}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         ) : (
           <div className="p-8 rounded border border-gray-200 bg-white">
