@@ -49,13 +49,16 @@ cp .env.example .env
 # Backend
 DATABASE_URL="postgresql://username:password@localhost:5432/dbname"
 JWT_SECRET="your-jwt-secret"
-HELIUS_API_KEY="your-helius-api-key"
+HELIUS_API_KEY="your-helius-api-key" #login to helius get api key
+NEXT_PUBLIC_BACKEND_URL="http://localhost:5000" #add ngrok instance, used to create helius webhook
 
 # Frontend
 NEXT_PUBLIC_BACKEND_URL="http://localhost:5000"
 ```
 # Database
+```bash
 DATABASE_URL="postgres://postgres:mysecretpassword@localhost:5433/postgres"
+```
 
 Note: The `.env.example` file serves as a template showing required environment variables. Never commit your actual `.env` file to version control as it contains sensitive information.
 
@@ -95,27 +98,24 @@ npm install
 
 # Install frontend dependencies
 cd ../web
-
+cp .env .env.example
 npm install
 ```
-
+Enter variables values in .env
 3. Set up Prisma:
 ```bash
 # Navigate to the backend directory
-cd apps/api
-
+cd packages/database
+cp .env .env.example
 # Install Prisma CLI
-npm install prisma --save-dev
+npm install
 
 # After setting up your schema, generate Prisma Client
 npx prisma generate
 
 # Create and apply migrations
-npx prisma migrate dev --name init
+npx prisma db push
 
-# Run Prisma migrations
-cd apps/api
-npm run db:push
 ```
 
 ## Prisma Schema
@@ -171,10 +171,26 @@ model Webhook {
 
 ## Running the Application
 
-1. Start the application:
+1.Backend Ngrok Setup:
+
+Install ngrok login and add your token, after that run 
+```bash
+ngrok http http://localhost:5000
+```
+2. Fill the values of env variables.
+3. Start the application:
 ```bash
 npm run dev
 ```
+4. Run Prisma Studio:
+```bash
+cd packages/database
+
+npm run studio
+```
+
+
+
 
 The application will be available at:
 - Frontend: http://localhost:3000
@@ -225,7 +241,7 @@ The application will be available at:
 - `POST /api/helius/create-webhook` - Create new webhook
 - `GET /api/helius/webhooks` - Get user's webhooks
 - `DELETE /api/helius/webhook/:id` - Delete webhook
-
+- `POST /api/helius/webhook-handler`- Data coming from helius is handled by this api, to make this work in local, run it on ngrok.
 ## Security Considerations
 
 - All API endpoints are protected with JWT authentication
@@ -241,7 +257,11 @@ The application will be available at:
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
-
+6. 
+## Future Modifications
+1. User Postgres table connection with sockets to show user data.
+2. Supporting more events from webhook in helius.
+   
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
