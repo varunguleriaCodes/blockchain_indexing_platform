@@ -78,7 +78,12 @@ router.delete('/webhook/:webhookId', auth, async (req: Request, res: Response): 
         }
 
         // Delete webhook from Helius
-        await helius.deleteWebhook(webhookId);
+        const apiEndpoint = `https://api.helius.xyz/v0/webhooks/${webhookId}?api-key=${process.env.HELIUS_API_KEY}`;
+  
+        const response = await fetch(apiEndpoint, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+        });
 
         // Delete webhook from our database
         await prisma.webhook.delete({
@@ -96,10 +101,6 @@ router.delete('/webhook/:webhookId', auth, async (req: Request, res: Response): 
 
 router.post("/webhook-handler", async (req: Request, res: Response): Promise<void> => {
     try {
-        console.log("Received webhook data:", req.body);
-        const data = JSON.stringify(req.body, null, 2);
-        fs.appendFileSync("webhook_logs.json", data + ",\n");
-
         const transactionData = req.body;
         const userId = req.query.userId;
 
@@ -145,7 +146,7 @@ router.get('/webhooks', auth, async (req: any, res: Response): Promise<void> => 
     try {
         const webhooks = await prisma.webhook.findMany({
             where: {
-                userId: req.query.userId
+                userId: parseInt(req.query.userId)
             },
             orderBy: {
                 createdAt: 'desc'

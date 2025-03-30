@@ -7,7 +7,6 @@ export function transactionsHandler(transactionType: string, data: any) {
       originPlatform: data.source || "unknown",
   };
   
-  console.log("9", transactionType, sharedInfo);
   
   switch (transactionType) {
       case "transfer": {

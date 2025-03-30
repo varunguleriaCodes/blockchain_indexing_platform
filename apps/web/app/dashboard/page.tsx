@@ -108,8 +108,8 @@ export default function Dashboard() {
       );
 
       setSuccess("PostgreSQL connection and webhook created successfully!");
-      handleCancel(); // Reset form
-      loadWebhooks(); // Reload webhooks list
+      handleCancel();
+      loadWebhooks();
     } catch (error: any) {
       console.error("Error:", error);
       setError(error.response?.data?.message || error.message || "Failed to setup connection and webhook");

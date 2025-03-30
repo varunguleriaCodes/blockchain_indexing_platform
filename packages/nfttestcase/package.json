@@ -1,0 +1,21 @@
+{
+  "name": "nfttestcase",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev":"node index.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@metaplex-foundation/mpl-token-metadata": "^3.4.0",
+    "@metaplex-foundation/umi": "^1.1.1",
+    "@metaplex-foundation/umi-bundle-defaults": "^1.1.1",
+    "@metaplex-foundation/umi-uploader-irys": "^1.1.1",
+    "@metaplex-foundation/umi-web3js-adapters": "^1.1.1",
+    "@solana/web3.js": "^1.98.0"
+  }
+}
