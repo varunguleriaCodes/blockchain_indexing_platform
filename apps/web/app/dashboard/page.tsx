@@ -1,17 +1,12 @@
 "use client";
-import { useState,useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
+import { io, Socket } from "socket.io-client";
 
 export default function Dashboard() {
   const router = useRouter();
-  useEffect(() => {
-    const accessToken = sessionStorage.getItem("accessToken");
-    if (!accessToken) {
-      router.push("/login");
-    }
-  }, [router]);
-
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [formData, setFormData] = useState({
     host: "",
     port: "",
@@ -33,6 +28,66 @@ export default function Dashboard() {
   const [selectedTable, setSelectedTable] = useState("");
   const [availableTables, setAvailableTables] = useState<string[]>([]);
   const [connectionId, setConnectionId] = useState<number | null>(null);
+
+  // Setup Socket.IO connection
+  useEffect(() => {
+    const accessToken = sessionStorage.getItem("accessToken");
+    const userData = JSON.parse(sessionStorage.getItem("user") || "{}");
+    
+    if (!accessToken) {
+      router.push("/login");
+      return;
+    }
+
+    // Initialize Socket.IO connection
+    const socketInstance = io(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000');
+
+    socketInstance.on('connect', () => {
+      console.log('Socket.IO Connected');
+      // Authenticate the socket connection
+      socketInstance.emit('authenticate', {
+        userId: userData.id,
+        token: accessToken
+      });
+    });
+
+    socketInstance.on('tableUpdate', async (data) => {
+      // Check if the update is for the current user and selected table
+      if (data.userId === userData.id && data.tableName === selectedTable) {
+        // Refresh table data
+        await refreshTableData();
+      }
+    });
+
+    socketInstance.on('disconnect', () => {
+      console.log('Socket.IO Disconnected');
+    });
+
+    setSocket(socketInstance);
+
+    // Cleanup on unmount
+    return () => {
+      socketInstance.disconnect();
+    };
+  }, [router]);
+
+  // Function to refresh table data
+  const refreshTableData = async () => {
+    if (!connectionId || !selectedTable) return;
+    
+    try {
+      const accessToken = sessionStorage.getItem('accessToken');
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/postgres/connections/${connectionId}/tables/${selectedTable}/data`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      
+      setTableData(response.data.rows);
+    } catch (error) {
+      console.error("Error refreshing table data:", error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -5,6 +5,7 @@ import helius from '../lib/helius';
 import { auth } from '../middleware/auth';
 import { insertData } from '../services/postgres.service';
 import { transactionsHandler } from '../services/transaction.handler';
+import { io } from '../index';
 const fs = require("fs");
 
 
@@ -130,6 +131,12 @@ router.post("/webhook-handler", async (req: Request, res: Response): Promise<voi
                 userId: Number(userId),
                 table: dataFormation.table,
                 data: [dataFormation.data]
+            });
+
+            // Emit Socket.IO event for table update
+            io.emit('tableUpdate', {
+                userId: Number(userId),
+                tableName: dataFormation.table
             });
         }
 
