@@ -147,4 +147,22 @@ router.post("/webhook-handler", async (req: Request, res: Response): Promise<voi
     }
 });
 
+// Get user's webhooks
+router.get('/webhooks', auth, async (req: any, res: Response): Promise<void> => {
+    try {
+        const webhooks = await prisma.webhook.findMany({
+            where: {
+                userId: req.query.userId
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+        res.json(webhooks);
+    } catch (error) {
+        console.error('Error fetching webhooks:', error);
+        res.status(500).json({ error: 'Failed to fetch webhooks' });
+    }
+});
+
 export default router;
